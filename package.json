@@ -1,0 +1,24 @@
+{
+  "name": "jobapp",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "api:dev": "npm run dev -w @jobapp/api",
+    "api:worker": "npm run worker -w @jobapp/api",
+    "db:migrate": "npm run migrate -w @jobapp/api",
+    "ingest": "npm run ingest -w @jobapp/api",
+    "sweep": "npm run sweep -w @jobapp/api",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/node-cron": "^3.0.11",
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
