@@ -4,7 +4,7 @@ Monorepo for the iOS/Android job aggregator and on-the-spot resume editor.
 
 ```
 apps/api          Node + Fastify API, ingestion worker, dead-link sweeper (TypeScript)
-apps/mobile       Expo app (Phase 4, not yet created)
+apps/mobile       Expo app for iOS and Android (Expo Router, TanStack Query)
 packages/shared   Types and logic shared by API and app: enums, resume JSON schema,
                   search query schema, skills dictionary, location parser
 ```
@@ -16,7 +16,7 @@ packages/shared   Types and logic shared by API and app: enums, resume JSON sche
 | 1 | Monorepo, Postgres schema, shared types | ✅ done |
 | 2 | Ingestion adapters, dedup, experience extraction, sweeper, jobs API | ✅ done |
 | 3 | Resume upload/parse, match audit, bullet tailoring, PDF export | ✅ done |
-| 4 | Expo screens | next |
+| 4 | Expo screens (iOS + Android) | ✅ done |
 
 ## Decisions so far
 
@@ -43,6 +43,12 @@ npm run db:migrate
 npm run ingest                           # pull jobs now
 npm run api:dev                          # http://localhost:4000
 npm run api:worker                       # scheduled ingest every 4h + daily sweep
+```
+
+Then the app, in a second terminal:
+
+```bash
+cd apps/mobile && npx expo start   # press i for the iOS Simulator, or scan the QR code with Expo Go
 ```
 
 Tests and types: `npm test`, `npm run typecheck`.

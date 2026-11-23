@@ -63,9 +63,12 @@ export function renderResumeHtml(r: Resume): string {
   const section = (title: string, body: string) => (body.trim() ? `<section><h2>${title}</h2>${body}</section>` : '');
 
   return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>${esc(c.fullName || 'Resume')}</title>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=816">
+<title>${esc(c.fullName || 'Resume')}</title>
 <style>
   * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   body { margin: 0; font-family: Helvetica, Arial, sans-serif; font-size: 10.5pt; line-height: 1.38; color: #111; }
   h1 { font-size: 20pt; margin: 0 0 2pt; letter-spacing: 0.2pt; }
   .contact { font-size: 9.5pt; color: #333; }
@@ -83,6 +86,8 @@ export function renderResumeHtml(r: Resume): string {
   li { margin-bottom: 2pt; }
   p { margin: 0; }
   .skills { margin: 0; }
+  /* On-screen preview only: page-like margins. Printing uses the PDF margins instead. */
+  @media screen { html { background: #fff; } body { padding: 52px 62px; } }
 </style></head>
 <body>
   <header>

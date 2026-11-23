@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Resume } from '@jobapp/shared';
-import { auditMatch } from './match';
+import { auditMatch, titleRelevance } from './match';
 import { RulesTailorer } from './tailor';
 
 const resume: Resume = {
@@ -61,4 +61,13 @@ test('rules tailor: action verbs and job wording, never new facts', async () => 
 
   const r4 = await t.tailor({ text: 'assisted with migrating k8s clusters', job: { ...job, coreSkills: ['Kubernetes'] }, resumeSkills: [] });
   assert.equal(r4.suggestion, 'Contributed to migrating Kubernetes clusters');
+});
+
+test('title relevance keeps unrelated roles from scoring high', () => {
+  assert.equal(titleRelevance('Senior Software Engineer, Payments', ['Software Developer']), 1);
+  assert.equal(titleRelevance('Product Marketing Manager', ['Senior Backend Engineer', 'Software Engineer']), 0);
+  const noSkills = { ...job, title: 'Product Marketing Manager', coreSkills: [], minYearsExperience: null };
+  assert.ok(auditMatch(resume, noSkills).score <= 40, 'unrelated title with no listed skills');
+  const related = { ...job, title: 'Backend Software Engineer', coreSkills: [], minYearsExperience: null };
+  assert.ok(auditMatch(resume, related).score >= 70, 'matching title with no listed skills');
 });

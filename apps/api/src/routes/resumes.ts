@@ -1,13 +1,14 @@
 import { canonicalSkill, extractSkills, ResumeSchema, type Resume } from '@jobapp/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { config } from '../config';
 import { pool } from '../db/pool';
 import { getObject, putObject, signedUrl, verifySignature } from '../lib/storage';
 import { totalYears } from '../resume/dates';
 import { detectKind, extractText } from '../resume/extract-text';
 import { auditMatch, withImpliedSkills, type AuditJob } from '../resume/match';
 import { parseResumeText } from '../resume/parse';
-import { defaultPaper, renderResumePdf } from '../resume/pdf';
+import { defaultPaper, renderResumeHtml, renderResumePdf } from '../resume/pdf';
 import { getTailorer } from '../resume/tailor';
 import { requireUser } from './users';
 
@@ -168,7 +169,8 @@ export async function resumeRoutes(app: FastifyInstance) {
       if (!row) return reply.code(404).send({ error: 'resume_not_found', message: 'Upload a resume first' });
       resume = row.parsed_json;
     }
-    return { jobId: job.id, ...auditMatch(resume, job) };
+    const { rows: u } = await pool.query<{ target_titles: string[] }>('SELECT target_titles FROM users WHERE id = $1', [userId]);
+    return { jobId: job.id, ...auditMatch(resume, job, u[0]?.target_titles ?? []) };
   });
 
   /**
@@ -225,14 +227,27 @@ export async function resumeRoutes(app: FastifyInstance) {
     }
     const safeName = (resume.contact.fullName || 'Resume').replace(/[^\p{L}\p{N} _-]/gu, '').trim().replace(/\s+/g, '_');
     const company = job?.companyName.replace(/[^\p{L}\p{N}]/gu, '') ?? '';
+    // Links point at whatever address the phone used to reach us, unless PUBLIC_BASE_URL is set.
+    const base = config.PUBLIC_BASE_URL || `${req.protocol}://${req.headers.host}`;
     return {
-      ...signedUrl(key),
+      ...signedUrl(key, base),
       fileName: `${safeName}${company ? `_${company}` : ''}_Resume.pdf`,
       paper,
       bytes: pdf.length,
       tailoredResumeId,
       applyUrl: job?.applyUrl ?? null,
     };
+  });
+
+  /** The exact HTML the PDF is printed from, for an in-app preview that matches on iOS and Android. */
+  app.post<{ Params: { resumeId: string } }>('/api/resumes/:resumeId/preview-html', async (req, reply) => {
+    const userId = await requireUser(req, reply);
+    if (!userId) return;
+    const body = z.object({ resume: ResumeSchema.optional() }).safeParse(req.body ?? {});
+    if (!body.success) return reply.code(400).send(badBody(body.error));
+    const row = await loadOwnResume(userId, req.params.resumeId);
+    if (!row) return reply.code(404).send({ error: 'resume_not_found' });
+    return reply.header('Content-Type', 'text/html; charset=utf-8').send(renderResumeHtml(body.data.resume ?? row.parsed_json));
   });
 
   /** Signed download for stored files (resume originals and exported PDFs). */

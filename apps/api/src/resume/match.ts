@@ -23,6 +23,8 @@ export interface MatchAudit {
   score: number;
   skillScore: number;
   experienceScore: number;
+  /** How close the job title is to the person's past or target roles. */
+  titleScore: number;
   matchedSkills: string[];
   missingSkills: string[];
   /** Skills the resume lists but never backs up in a bullet or the summary. */
@@ -72,7 +74,71 @@ const HAS_METRIC = /\d|\b(one|two|three|four|five|six|seven|eight|nine|ten|dozen
 
 const WEAK_OPENERS = /^(responsible for|worked on|helped( to)?|assisted( in| with)?|involved in|tasked with|duties included|participated in|in charge of|handled)\b/i;
 
-export function auditMatch(resume: Resume, job: AuditJob): MatchAudit {
+// ---------------------------------------------------------------- title relevance
+const TITLE_STOP = new Set(
+  'senior sr junior jr lead staff principal intern internship i ii iii iv of and the for to in at a an head associate chief vp director remote hybrid onsite contract full time part'.split(' '),
+);
+const TITLE_SYNONYMS: Record<string, string> = {
+  developer: 'engineer', dev: 'engineer', programmer: 'engineer', swe: 'engineer', sde: 'engineer',
+  pm: 'product', mgr: 'manager', analytics: 'analyst', scientist: 'science',
+};
+
+function titleTokens(title: string): Set<string> {
+  return new Set(
+    (title.toLowerCase().match(/[a-z][a-z0-9+#.]*/g) ?? [])
+      .map((t) => TITLE_SYNONYMS[t] ?? t)
+      .filter((t) => t.length > 1 && !TITLE_STOP.has(t)),
+  );
+}
+
+/**
+ * How close the job title is to anything the person has done or is targeting (0–1):
+ * the best share of the job title's words found in one of their titles.
+ */
+export function titleRelevance(jobTitle: string, candidateTitles: string[]): number {
+  const job = titleTokens(jobTitle.split(/\s[-–|(,]\s?|,\s/)[0] ?? jobTitle);
+  if (job.size === 0) return 1;
+  let best = 0;
+  for (const c of candidateTitles) {
+    const ct = titleTokens(c);
+    const hit = [...job].filter((t) => ct.has(t)).length;
+    best = Math.max(best, hit / job.size);
+  }
+  return best;
+}
+
+/**
+ * Overall score. Skills dominate when the posting names any; otherwise the title carries the
+ * weight, so an unrelated role can't score 100% just because no requirements were listed.
+ */
+function combine(skill: number, exp: number, title: number, hasSkills: boolean): number {
+  return Math.round(100 * (hasSkills ? 0.55 * skill + 0.25 * exp + 0.2 * title : 0.65 * title + 0.35 * exp));
+}
+
+export interface ResumeProfile {
+  skills: Set<string>;
+  years: number;
+  titles: string[];
+}
+
+/** Cheap score for feed cards: same weighting as the audit, without bullet analysis. */
+export function quickScore(p: ResumeProfile, job: { title: string; coreSkills: string[]; minYearsExperience: number | null }): number {
+  const jobSkills = job.coreSkills.slice(0, 12);
+  const weights = jobSkills.map((_, i) => (i < 5 ? 2 : 1));
+  const totalW = weights.reduce((a, b) => a + b, 0);
+  const skill = totalW ? jobSkills.reduce((acc, s, i) => acc + (p.skills.has(s.toLowerCase()) ? weights[i]! : 0), 0) / totalW : 1;
+  const req = job.minYearsExperience;
+  const exp = req == null || req === 0 ? 1 : Math.min(1, p.years / req);
+  return combine(skill, exp, titleRelevance(job.title, p.titles), jobSkills.length > 0);
+}
+
+/** Lower-cased skills a resume shows (listed, used in bullets, or implied). */
+export function resumeSkillSet(resume: Resume): Set<string> {
+  const prose = [resume.summary, ...resume.experience.flatMap((e) => [e.roleTitle, ...e.bullets])].join('\n');
+  return new Set(withImpliedSkills([...resume.skills.map(canonicalSkill), ...extractSkills(prose, 200)]).map((s) => s.toLowerCase()));
+}
+
+export function auditMatch(resume: Resume, job: AuditJob, targetTitles: string[] = []): MatchAudit {
   const prose = [resume.summary, ...resume.experience.flatMap((e) => [e.roleTitle, ...e.bullets])].join('\n');
   const evidenced = new Set(extractSkills(prose, 200).map((s) => s.toLowerCase()));
   const listed = new Set(resume.skills.map((s) => canonicalSkill(s).toLowerCase()));
@@ -95,7 +161,8 @@ export function auditMatch(resume: Resume, job: AuditJob): MatchAudit {
   const experienceScore = required == null || required === 0 ? 1 : Math.min(1, resumeYears / required);
   const experienceGapYears = required == null ? 0 : Math.max(0, Math.round((required - resumeYears) * 10) / 10);
 
-  const score = Math.round(100 * (jobSkills.length ? 0.7 * skillScore + 0.3 * experienceScore : experienceScore));
+  const titleScore = titleRelevance(job.title, [...resume.experience.map((e) => e.roleTitle), ...targetTitles]);
+  const score = combine(skillScore, experienceScore, titleScore, jobSkills.length > 0);
 
   const unevidencedSkills = resume.skills
     .map(canonicalSkill)
@@ -130,6 +197,7 @@ export function auditMatch(resume: Resume, job: AuditJob): MatchAudit {
     score,
     skillScore: Math.round(skillScore * 100),
     experienceScore: Math.round(experienceScore * 100),
+    titleScore: Math.round(titleScore * 100),
     matchedSkills,
     missingSkills,
     unevidencedSkills,

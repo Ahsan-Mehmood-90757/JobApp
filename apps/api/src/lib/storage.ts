@@ -31,10 +31,10 @@ function sign(key: string, exp: number): string {
   return createHmac('sha256', config.FILE_SIGNING_SECRET).update(`${key}\n${exp}`).digest('base64url');
 }
 
-export function signedUrl(key: string, ttlSeconds = config.SIGNED_URL_TTL_SECONDS): { url: string; expiresAt: string } {
+export function signedUrl(key: string, baseUrl = config.PUBLIC_BASE_URL, ttlSeconds = config.SIGNED_URL_TTL_SECONDS): { url: string; expiresAt: string } {
   const exp = Math.floor(Date.now() / 1000) + ttlSeconds;
   const qs = new URLSearchParams({ key, exp: String(exp), sig: sign(key, exp) });
-  return { url: `${config.PUBLIC_BASE_URL}/files?${qs}`, expiresAt: new Date(exp * 1000).toISOString() };
+  return { url: `${baseUrl.replace(/\/$/, '')}/files?${qs}`, expiresAt: new Date(exp * 1000).toISOString() };
 }
 
 export function verifySignature(key: string, exp: string, sig: string): boolean {

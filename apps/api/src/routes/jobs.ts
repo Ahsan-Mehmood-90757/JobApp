@@ -1,7 +1,9 @@
-import { countryName, JobSearchQuerySchema, type Job, type JobDetail, type MarketOption, type Paginated } from '@jobapp/shared';
+import { countryName, JobSearchQuerySchema, type Job, type Resume, type JobDetail, type MarketOption, type Paginated } from '@jobapp/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { pool } from '../db/pool';
+import { totalYears } from '../resume/dates';
+import { quickScore, resumeSkillSet } from '../resume/match';
 
 const JOB_COLUMNS = `
   id, source_platform, title, company_name, location, city, region, trim(country_code) AS country_code,
@@ -29,6 +31,24 @@ type JobDbRow = {
   description_raw?: string;
 };
 
+/** If the request names a user with a resume, a scorer for feed cards; otherwise null. */
+async function scorerFor(userIdHeader: unknown): Promise<((j: Job) => number) | null> {
+  if (typeof userIdHeader !== 'string' || !z.uuid().safeParse(userIdHeader).success) return null;
+  const { rows } = await pool.query<{ parsed_json: Resume; target_titles: string[] }>(
+    `SELECT r.parsed_json, u.target_titles FROM user_resumes r JOIN users u ON u.id = r.user_id
+      WHERE r.user_id = $1 ORDER BY r.updated_at DESC LIMIT 1`,
+    [userIdHeader],
+  );
+  const row = rows[0];
+  if (!row) return null;
+  const profile = {
+    skills: resumeSkillSet(row.parsed_json),
+    years: totalYears(row.parsed_json.experience),
+    titles: [...row.parsed_json.experience.map((e) => e.roleTitle), ...row.target_titles],
+  };
+  return (j) => quickScore(profile, j);
+}
+
 function toJob(r: JobDbRow): Job {
   return {
     id: r.id,
@@ -48,6 +68,7 @@ function toJob(r: JobDbRow): Job {
     applyUrl: r.apply_url,
     postedAt: r.posted_at?.toISOString() ?? null,
     lastVerifiedAt: r.last_verified_at.toISOString(),
+    matchScore: null,
   };
 }
 
@@ -112,8 +133,9 @@ export async function jobRoutes(app: FastifyInstance) {
                    ORDER BY ${orderBy} LIMIT ${limit} OFFSET ${offset}`;
     const { rows } = await pool.query<JobDbRow & { total_count: string }>(sql, params);
 
+    const score = await scorerFor(req.headers['x-user-id']);
     const body: Paginated<Job> = {
-      items: rows.map(toJob),
+      items: rows.map(toJob).map((j) => (score ? { ...j, matchScore: score(j) } : j)),
       page: f.page,
       pageSize: f.page_size,
       total: rows[0] ? Number(rows[0].total_count) : 0,
@@ -126,7 +148,9 @@ export async function jobRoutes(app: FastifyInstance) {
     const { rows } = await pool.query<JobDbRow>(`SELECT ${JOB_COLUMNS}, description_raw FROM jobs WHERE id = $1`, [req.params.id]);
     const row = rows[0];
     if (!row) return reply.code(404).send({ error: 'not_found' });
-    const job: JobDetail = { ...toJob(row), descriptionRaw: row.description_raw ?? '' };
+    const base = toJob(row);
+    const score = await scorerFor(req.headers['x-user-id']);
+    const job: JobDetail = { ...base, matchScore: score ? score(base) : null, descriptionRaw: row.description_raw ?? '' };
     return job;
   });
 

@@ -27,6 +27,8 @@ export interface Job {
   applyUrl: string;
   postedAt: string | null;
   lastVerifiedAt: string;
+  /** 0–100 fit with the requesting user's newest resume; null without a resume. */
+  matchScore: number | null;
 }
 
 export interface JobDetail extends Job {

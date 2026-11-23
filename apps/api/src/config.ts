@@ -29,8 +29,11 @@ const EnvSchema = z.object({
 
   /** Local file storage (uploaded resumes, exported PDFs). Swap for Supabase Storage later. */
   STORAGE_DIR: z.string().default('./storage'),
-  /** Base URL the phone uses to reach this API; signed file links are built from it. */
-  PUBLIC_BASE_URL: z.string().default('http://localhost:4000'),
+  /**
+   * Base URL for signed file links. Empty = use the host the request came in on, which works for
+   * simulators and phones on the same Wi-Fi without configuration.
+   */
+  PUBLIC_BASE_URL: z.string().default(''),
   /** HMAC secret for signed download URLs. Set a long random value outside local dev. */
   FILE_SIGNING_SECRET: z.string().min(16).default('dev-only-signing-secret-change-me'),
   SIGNED_URL_TTL_SECONDS: z.coerce.number().int().min(60).default(3600),
