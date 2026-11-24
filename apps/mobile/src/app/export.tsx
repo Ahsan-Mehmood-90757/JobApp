@@ -8,7 +8,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { Button, EmptyState, ErrorBox, Row, T } from '@/components/ui';
-import { api } from '@/lib/api';
+import { api, BASE_HEADERS } from '@/lib/api';
 import { draftStore } from '@/lib/draft-store';
 import { radius, space, useColors } from '@/theme';
 
@@ -35,7 +35,7 @@ export default function ExportScreen() {
     staleTime: Infinity,
     queryFn: async () => {
       const result = await api.exportPdf(resumeId, { resume, jobId });
-      const file = await File.downloadFileAsync(result.url, new File(Paths.cache, result.fileName), { idempotent: true });
+      const file = await File.downloadFileAsync(result.url, new File(Paths.cache, result.fileName), { idempotent: true, headers: BASE_HEADERS });
       return { ...result, file };
     },
   });

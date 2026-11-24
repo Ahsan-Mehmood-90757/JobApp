@@ -17,6 +17,12 @@ function resolveBaseUrl(): string {
 
 export const API_URL = resolveBaseUrl();
 
+/**
+ * Headers sent on every request. `ngrok-skip-browser-warning` stops ngrok's free-plan warning page
+ * from replacing API responses when the server is reached through an ngrok tunnel (harmless otherwise).
+ */
+export const BASE_HEADERS: Record<string, string> = { 'ngrok-skip-browser-warning': '1' };
+
 let currentUserId: string | null = null;
 export function setApiUser(id: string | null) {
   currentUserId = id;
@@ -33,7 +39,7 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
-  const headers: Record<string, string> = { Accept: 'application/json', ...(init.headers as Record<string, string>) };
+  const headers: Record<string, string> = { ...BASE_HEADERS, Accept: 'application/json', ...(init.headers as Record<string, string>) };
   if (currentUserId) headers['X-User-Id'] = currentUserId;
   let body = init.body;
   if (init.json !== undefined) {
@@ -173,6 +179,7 @@ export const api = {
       const xhr = new XMLHttpRequest();
       xhr.open('POST', `${API_URL}/api/resumes/upload`);
       xhr.setRequestHeader('Accept', 'application/json');
+      for (const [k, v] of Object.entries(BASE_HEADERS)) xhr.setRequestHeader(k, v);
       if (currentUserId) xhr.setRequestHeader('X-User-Id', currentUserId);
       xhr.timeout = 60_000;
       xhr.onload = () => {

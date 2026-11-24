@@ -9,7 +9,9 @@ import { userRoutes } from './routes/users';
 import { closeBrowser } from './resume/pdf';
 
 export async function buildServer() {
-  const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' } });
+  // trustProxy: behind a tunnel or load balancer (ngrok, Railway, ...) use X-Forwarded-Proto/Host,
+  // so signed download links come out as https://<public host>.
+  const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' }, trustProxy: true });
   await app.register(cors, { origin: true });
   await app.register(multipart, { limits: { fileSize: config.MAX_UPLOAD_MB * 1024 * 1024, files: 1 } });
   app.addHook('onClose', async () => {
