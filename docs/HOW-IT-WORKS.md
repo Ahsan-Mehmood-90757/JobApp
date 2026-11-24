@@ -496,24 +496,48 @@ The app follows the phone's light/dark setting (colours in `src/theme.ts`).
 
 ---
 
-## 11. Running it and the APK
+## 11. Running it, auto-start, and the APK
 
 **Development:** see the root README. Short version:
 - `npm run api:dev` starts the API;
 - `cd apps/mobile && npx expo start`, then open the app on the simulator or a phone with Expo Go.
 
-**The APK** (built with EAS, profile `preview` in `apps/mobile/eas.json`):
-- It's a standalone Android app, so no Expo Go is needed.
-- Its server address is fixed at build time to **`http://localhost:4000`**, as you chose, and
-  plain HTTP is allowed for it.
-- So it works when:
-  1. the phone is plugged into the Mac by USB;
-  2. the API is running (`npm run api:dev`);
-  3. port forwarding is on: `adb reverse tcp:4000 tcp:4000`.
-- To make it work anywhere, deploy the API and database (e.g. Railway, Render, Fly.io + Supabase
-  Postgres), put that `https://` address in `EXPO_PUBLIC_API_URL` in `eas.json`, and rebuild.
+**Always-on test server (this Mac).** `scripts/mac/install-autostart.sh` installs three macOS
+launchd agents that start when you log in and restart if they crash:
 
----
+| Agent | Runs |
+|---|---|
+| `com.jobapp.api` | `ensure-postgres.sh`, then the API on port 4000 |
+| `com.jobapp.worker` | the ingestion schedule (every 4 h) and the daily sweep |
+| `com.jobapp.tunnel` | `ngrok http 4000` on the account's free static domain, once the API answers |
+
+How it fits together:
+- Postgres is started by Homebrew's own agent.
+- `ensure-postgres.sh` also fixes the "lock file already exists" failure you get after an
+  unclean shutdown, when macOS reuses Postgres's old process ID for another program.
+- `scripts/mac/status.sh` shows what's up; logs are in `~/Library/Logs/JobApp/`.
+- The project must live outside Desktop/Documents/Downloads (it's in `~/Developer/JobApp`),
+  because macOS blocks background services from reading those folders.
+
+**Why the tunnel works:**
+- the API runs with `trustProxy`, so behind ngrok it sees the public `https://` host and signed
+  PDF links point there;
+- the app sends `ngrok-skip-browser-warning` on every request, so ngrok's free-plan warning page
+  never replaces an API response.
+
+**The APK** (EAS profile `preview` in `apps/mobile/eas.json`):
+- the server address comes from the EAS environment variable `EXPO_PUBLIC_API_URL`, stored on
+  Expo, not in this public repo. To point it elsewhere, run
+  `npx eas-cli env:update --environment preview --name EXPO_PUBLIC_API_URL`, then rebuild with
+  `npx eas-cli build -p android --profile preview`;
+- testers can install it anywhere, as long as this Mac is awake, logged in, and online;
+- for real users, move the API, database and files to a host and point the variable there.
+
+**Security note for the tunnel:**
+- anyone with the APK (or the address) can reach the API;
+- there's no login yet, and uploads are stored on this Mac (10 MB limit each);
+- fine for a small test group. Run `scripts/mac/uninstall-autostart.sh`, or stop the tunnel
+  agent, when you're not testing.
 
 ## 12. Known limits and sensible next steps
 

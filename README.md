@@ -55,6 +55,18 @@ cd apps/mobile && npx expo start   # press i for the iOS Simulator, or scan the 
 
 Tests and types: `npm test`, `npm run typecheck`.
 
+### Always-on test server (macOS)
+
+```bash
+scripts/mac/install-autostart.sh   # API + job worker + ngrok tunnel start at login, restart on crash
+scripts/mac/status.sh              # what's running, and the public tunnel address
+scripts/mac/uninstall-autostart.sh # remove it again
+```
+
+The project must sit outside Desktop/Documents/Downloads (macOS blocks background services there).
+ngrok needs a free account (`ngrok config add-authtoken …`) and a claimed free domain.
+Details in [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md#11-running-it-auto-start-and-the-apk).
+
 ## API
 
 `GET /api/jobs`
