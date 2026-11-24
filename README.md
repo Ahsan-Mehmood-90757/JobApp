@@ -1,5 +1,7 @@
 # JobApp: Job Aggregator & Resume Editor
 
+**How it all works, in depth:** [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md)
+
 Monorepo for the iOS/Android job aggregator and on-the-spot resume editor.
 
 ```
