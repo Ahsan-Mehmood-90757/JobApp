@@ -25,7 +25,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.jobapp.mobile"
+      "package": "com.jobapp.mobile",
+      "versionCode": 1
     },
     "plugins": [
       "expo-router",
@@ -37,11 +38,30 @@
           "imageWidth": 76
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "112bda3e-66a9-4a9b-8c48-dc1e437a1031"
+      }
+    },
+    "owner": "ahsanm3hmood"
   }
 }
