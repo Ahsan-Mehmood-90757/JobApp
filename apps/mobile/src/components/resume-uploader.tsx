@@ -24,7 +24,7 @@ export function ResumeUploader({ onUploaded, label = 'Upload resume (PDF or DOCX
     if (picked.canceled || !picked.assets[0]) return;
     setBusy(true);
     try {
-      const r = await api.uploadResume(picked.assets[0].uri);
+      const r = await api.uploadResume(picked.assets[0]);
       setResult(r);
       invalidate();
       onUploaded?.(r);

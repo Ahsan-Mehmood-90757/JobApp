@@ -1,7 +1,5 @@
 import type { Job, JobDetail, MarketOption, MarketScope, Paginated, Resume, SeniorityTier, UserPreferences, WorkArrangement } from '@jobapp/shared';
 import Constants from 'expo-constants';
-import { fetch as expoFetch } from 'expo/fetch';
-import { File } from 'expo-file-system';
 import { Platform } from 'react-native';
 
 /**
@@ -156,20 +154,39 @@ export const api = {
   previewHtml: (resumeId: string, resume: Resume) =>
     request<string>(`/api/resumes/${resumeId}/preview-html`, { method: 'POST', json: { resume } }),
 
-  /** Multipart upload of a picked PDF/DOCX (expo/fetch + expo-file-system File, per SDK 58 docs). */
-  uploadResume: async (fileUri: string): Promise<UploadResult> => {
-    const form = new FormData();
-    form.append('file', new File(fileUri) as unknown as Blob);
-    const headers: Record<string, string> = {};
-    if (currentUserId) headers['X-User-Id'] = currentUserId;
-    let res;
-    try {
-      res = await expoFetch(`${API_URL}/api/resumes/upload`, { method: 'POST', body: form, headers });
-    } catch {
-      throw new ApiError(0, 'network', `Can't reach the server at ${API_URL}.`);
-    }
-    const data = (await res.json().catch(() => ({}))) as UploadResult & { error?: string; message?: string };
-    if (!res.ok) throw new ApiError(res.status, data.error ?? 'error', data.message ?? 'Upload failed');
-    return data;
-  },
+  /**
+   * Multipart upload of a picked PDF/DOCX.
+   *
+   * Uses XMLHttpRequest with React Native's FormData file part ({ uri, name, type }): RN's native
+   * networking streams the file from its uri on both iOS and Android. Two other routes fail on
+   * Android in SDK 58: the global fetch (expo/fetch) rejects { uri } parts, and expo-file-system's
+   * File lacks read access to the picker's cached copy.
+   */
+  uploadResume: (file: { uri: string; name: string; mimeType?: string | null }): Promise<UploadResult> =>
+    new Promise((resolve, reject) => {
+      const form = new FormData();
+      const type =
+        file.mimeType ||
+        (/\.docx$/i.test(file.name) ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/pdf');
+      form.append('file', { uri: file.uri, name: file.name, type } as unknown as Blob);
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${API_URL}/api/resumes/upload`);
+      xhr.setRequestHeader('Accept', 'application/json');
+      if (currentUserId) xhr.setRequestHeader('X-User-Id', currentUserId);
+      xhr.timeout = 60_000;
+      xhr.onload = () => {
+        let data: UploadResult & { error?: string; message?: string };
+        try {
+          data = JSON.parse(xhr.responseText);
+        } catch {
+          return reject(new ApiError(xhr.status, 'bad_response', 'Unexpected response from the server'));
+        }
+        if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+        else reject(new ApiError(xhr.status, data.error ?? 'error', data.message ?? 'Upload failed'));
+      };
+      xhr.onerror = () => reject(new ApiError(0, 'network', `Can't reach the server at ${API_URL}.`));
+      xhr.ontimeout = () => reject(new ApiError(0, 'timeout', 'Upload timed out. Try again.'));
+      xhr.send(form);
+    }),
 };

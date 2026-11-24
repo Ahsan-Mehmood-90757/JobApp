@@ -6,23 +6,32 @@ import { profileIsValid, ProfileForm, type ProfileDraft } from '@/components/pro
 import { ResumeUploader } from '@/components/resume-uploader';
 import { Button, Card, T } from '@/components/ui';
 import { api } from '@/lib/api';
-import { useSession } from '@/lib/session';
+import { useProfile, useSession } from '@/lib/session';
 import { space, useColors } from '@/theme';
 
 /** Screen 1: Onboarding & career profile. Step 1 = preferences, step 2 = resume upload. */
 export default function Onboarding() {
+  const profile = useProfile();
+  if (profile.isPending) return null;
+  // Start from whatever is already saved (e.g. the app was closed halfway through onboarding).
+  const saved = profile.data;
+  const initial: ProfileDraft = {
+    fullName: saved?.fullName ?? '',
+    yearsExperience: saved?.targetTitles.length ? saved.yearsExperience : 2,
+    targetTitles: saved?.targetTitles ?? [],
+    workArrangements: saved?.workArrangements ?? ['remote', 'onsite', 'hybrid'],
+    marketScope: saved?.marketScope ?? 'global',
+    marketCountryCode: saved?.marketCountryCode ?? null,
+    marketCity: saved?.marketCity ?? null,
+  };
+  return <OnboardingSteps initial={initial} />;
+}
+
+function OnboardingSteps({ initial }: { initial: ProfileDraft }) {
   const c = useColors();
   const { markOnboarded } = useSession();
   const [step, setStep] = useState<1 | 2>(1);
-  const [draft, setDraft] = useState<ProfileDraft>({
-    fullName: '',
-    yearsExperience: 2,
-    targetTitles: [],
-    workArrangements: ['remote', 'onsite', 'hybrid'],
-    marketScope: 'global',
-    marketCountryCode: null,
-    marketCity: null,
-  });
+  const [draft, setDraft] = useState<ProfileDraft>(initial);
   const save = useMutation({ mutationFn: () => api.updateMe(draft), onSuccess: () => setStep(2) });
 
   return (
